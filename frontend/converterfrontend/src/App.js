@@ -4,9 +4,14 @@ import axios from 'axios';
 function FileUpload() {
   const [file, setFile] = useState(null);
   const [lwpolylines, setLwpolylines] = useState([]);
+  const [fileName, setFileName] = useState("");
 
   const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
+    const selectedFile = event.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setFileName(selectedFile.name); // Display the file name after selection
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -22,24 +27,49 @@ function FileUpload() {
 
     try {
       const response = await axios.post('http://localhost:5000/upload-dxf', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setLwpolylines(response.data);
+      setLwpolylines(response.data);  // Display the response from Flask
     } catch (error) {
-      console.error('There was an error uploading the file:', error);
+      console.error('Error uploading file:', error);
+    }
+  };
+
+  // Function to simulate clicking the hidden file input when the button is clicked
+  const triggerFileInput = () => {
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+      fileInput.click(); // Trigger the file input click
+    } else {
+      console.error('File input not found!');
     }
   };
 
   return (
     <div>
       <form onSubmit={handleSubmit}>
-        <input type="file" onChange={handleFileChange} />
+        <div>
+          {/* Hidden input with custom button */}
+          <input 
+            type="file" 
+            id="file-input" 
+            onChange={handleFileChange} 
+            style={{ display: 'none' }} // Hide the default file input
+          />
+          {/* Custom "Choose File" button */}
+          <button 
+            type="button" 
+            onClick={triggerFileInput} // Trigger file input click on custom button click
+          >
+            Choose File
+          </button>
+        </div>
         <button type="submit">Upload DXF</button>
       </form>
 
+      {fileName && <p>Selected File: {fileName}</p>} {/* Display selected file name */}
+      
       {lwpolylines.length > 0 && (
         <div>
           <h2>LWPOLYLINE Data:</h2>
