@@ -1,9 +1,15 @@
 import ezdxf
+import random
+from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter, column_index_from_string
 
 
+
+#########################################################################################################################################################################################
+# Function to read all polylines from DXF
+#########################################################################################################################################################################################
 
 def read_lwpolylines_from_dxf(file_path):
     """
@@ -42,6 +48,9 @@ def read_lwpolylines_from_dxf(file_path):
         print("Invalid DXF file structure.")
         return []
 
+#########################################################################################################################################################################################
+# Function to check if the selected polyline is a rectangle, if true, it will likely be a panel
+#########################################################################################################################################################################################
 
 def validate_rectangle(polyline):
     """
@@ -57,7 +66,7 @@ def validate_rectangle(polyline):
         return False
 
     # Calculate vectors for consecutive points (ensure loop closure with points[0])
-    vectors = [(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]) for i in range(4)]
+    vectors = [(round(points[i][0] - points[i - 1][0], 1) , round (points[i][1] - points[i - 1][1], 1)) for i in range(4)]
 
     # Check dot products of consecutive vectors
     for i in range(4):
@@ -72,6 +81,10 @@ def validate_rectangle(polyline):
     return True
 
 
+
+#########################################################################################################################################################################################
+# Function to check the properties of the PV cells or rectangels
+#########################################################################################################################################################################################
 
 def check_rectangle_properties(polyline):
     """
@@ -121,7 +134,10 @@ def check_rectangle_properties(polyline):
     return orientation, center, average_height, average_width, cellcenter
 
 
+#########################################################################################################################################################################################
 # Function to move all polylines to the origin
+#########################################################################################################################################################################################
+
 def move_polylines_to_origin(lwpolylines):
     """
     Moves all polylines to the origin by shifting all points to account for the minimum x and y.
@@ -144,7 +160,10 @@ def move_polylines_to_origin(lwpolylines):
 
     return lwpolylines
 
+#########################################################################################################################################################################################
 # Function to mirror points across the x-axis
+#########################################################################################################################################################################################
+
 def mirror_points_across_x_axis(lwpolylines):
     """
     Mirrors all points around the x-axis and makes all y-values positive.
@@ -173,7 +192,11 @@ def mirror_points_across_x_axis(lwpolylines):
     return lwpolylines
 
 
+#########################################################################################################################################################################################
 # Function to convert numeric column index to Excel-style column label
+#########################################################################################################################################################################################
+
+
 def column_index_to_label(index):
     """
     Converts a numeric column index (0-based) to an Excel-style column label.
@@ -185,7 +208,10 @@ def column_index_to_label(index):
         index = index // 26 - 1
     return label
 
+#########################################################################################################################################################################################
 # Function to find the grid cell for a given center and orientation
+#########################################################################################################################################################################################
+
 def find_grid_cell(cellcenter, grid_origin, cell_width, cell_height, grid_rows, grid_columns, orientation):
     """
     Finds the grid cell where the given cellcenter falls, and also returns the adjacent cell
@@ -229,7 +255,10 @@ def find_grid_cell(cellcenter, grid_origin, cell_width, cell_height, grid_rows, 
 
 
 
+#########################################################################################################################################################################################
 # Process the polyline data and write to the Excel file
+#########################################################################################################################################################################################
+
 def process_polylines_to_excel(lwpolylines, grid_origin, cell_width, cell_height, grid_rows, grid_columns):
 
     # Create a new workbook and select the active worksheet
@@ -292,50 +321,103 @@ def process_polylines_to_excel(lwpolylines, grid_origin, cell_width, cell_height
                 print(f"LWPOLYLINE {idx}: Cellcenter {cellcenter} is out of grid bounds.")
         else:
             print(f"LWPOLYLINE {idx}: Not a rectangle")
-
-    # Save to an Excel file
-    wb.save("grid_cells_output.xlsx")
-    print("Excel file saved as 'grid_cells_output.xlsx'")
-
-
-
-def master_function(file_path, grid_origin, cell_width, cell_height, grid_rows, grid_columns):
+        # Save to in-memory buffer
     
+    excel_io = BytesIO()
+    wb.save(excel_io)        
+   
+    # Make sure the pointer is at the beginning of the file
+    excel_io.seek(0)
+   
+    print("Returning BytesIO object from process_polylines_to_excel")  # Debugging log
+
+    return excel_io
+    """    # Save to an Excel file
+    wb.save("grid_cells_output.xlsx")
+    print("Excel file saved as 'grid_cells_output.xlsx'")"""
+
+
+
+#########################################################################################################################################################################################
+# Function to get averagge cell height and width
+#########################################################################################################################################################################################
+
+def calculate_avg_dimensions(valid_rectangles):
+    """
+    Selects 10 random rectangles from lwpolylines and calculates the average long and short side.
+
+    :param lwpolylines: List of valid rectangle polylines (each with 4 points).
+    :return: Tuple (avg_long_side, avg_short_side)
+    """
+    if not valid_rectangles:
+        return (0, 0)  # Return (0,0) if no rectangles exist
+
+    # Select 10 random rectangles (or all if fewer than 10)
+    sampled_rectangles = random.sample(valid_rectangles, min(10, len(valid_rectangles)))
+
+    total_long_side = 0
+    total_short_side = 0
+
+    for polyline in sampled_rectangles:
+        points = polyline["points"]
+
+        # Extract min/max x and y values
+        min_x = min(p[0] for p in points)
+        max_x = max(p[0] for p in points)
+        min_y = min(p[1] for p in points)
+        max_y = max(p[1] for p in points)
+
+        # Calculate width and height
+        width = max_x - min_x
+        height = max_y - min_y
+
+        # Assign long and short sides correctly
+        long_side = max(width, height)
+        short_side = min(width, height)
+
+        total_long_side += long_side
+        total_short_side += short_side
+
+    # Compute averages
+    avg_long_side = (total_long_side / len(sampled_rectangles))*0
+    avg_short_side = (total_short_side / len(sampled_rectangles))*1.01411
+
+    return avg_long_side, avg_short_side
+
+
+#########################################################################################################################################################################################
+# Master function, gets called to call all the above functions
+#########################################################################################################################################################################################
+
+def master_function(file_path, grid_origin, grid_rows, grid_columns):
+    
+
+    # Step 1: Read all polylones from dxf
     lwpolylines = read_lwpolylines_from_dxf(file_path)
     
     # Step 2: Filter for valid rectangles
     valid_rectangles = [polyline for polyline in lwpolylines if validate_rectangle(polyline)]
-    
-    # Step 3: Check rectangle properties (orientation, center, etc.)
-    for idx, polyline in enumerate(valid_rectangles, start=1):
-        orientation, center, avg_height, avg_width, cellcenter = check_rectangle_properties(polyline)
-        print(f"LWPOLYLINE {idx}:")
-        print(f"  Orientation: {orientation}")
-        print(f"  Center: {center}")
-        print(f"  Average Height: {avg_height}")
-        print(f"  Average Width: {avg_width}")
 
-        # Find grid cell for the center and adjacent cell
-        current_cell, adjacent_cell = find_grid_cell(center, grid_origin, cell_width, cell_height, grid_rows, grid_columns, orientation)
-        print(f"  Current Grid Cell: {current_cell}")
-        if adjacent_cell:
-            print(f"  Adjacent Grid Cell: {adjacent_cell}")
-        else:
-            print(f"  No adjacent cell (edge of grid)")
+    avg_long, avg_cell = calculate_avg_dimensions(valid_rectangles)
 
-    # Step 4: Move all polylines to the origin
-    moved_polylines = move_polylines_to_origin(lwpolylines)
 
-    # Step 5: Mirror points across the x-axis
+    # Step 3: Move all valid rectangles to the origin
+    moved_polylines = move_polylines_to_origin(valid_rectangles)
+
+    # Step 4: Mirror points across the x-axis
     flipped_polylines = mirror_points_across_x_axis(moved_polylines)
 
-    # Step 6: Print moved and mirrored polylines
-    for idx, polyline in enumerate(flipped_polylines, start=1):
-        print(f"LWPOLYLINE {idx} after moving to origin and mirroring:")
-        print(f"  Points: {polyline['points']}")
+    # Step NULL : Print moved and mirrored polylines
+    """ for idx, polyline in enumerate(flipped_polylines, start=1):
+            print(f"LWPOLYLINE {idx} after moving to origin and mirroring:")
+            print(f"  Points: {polyline['points']}")"""
 
-    # Step 7: Process polylines and write to Excel
-    process_polylines_to_excel(flipped_polylines, grid_origin, cell_width, cell_height, grid_rows, grid_columns)
+    # Step 6: Process polylines and write to Excel
+    excel_io = process_polylines_to_excel(flipped_polylines, grid_origin, avg_cell, avg_cell, grid_rows, grid_columns)
+    
+    
+    print(f"master_function returning object of type: {type(excel_io)}")  # Debugging log
+    return excel_io
 
     # Return a success message
-    return {"message": "File processed and Excel file saved as 'grid_cells_output.xlsx'"}
+    #return {"message": "File processed and Excel file saved as 'grid_cells_output.xlsx'"}

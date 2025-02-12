@@ -1,5 +1,7 @@
 import os
 from flask import Flask, jsonify, request
+from flask import send_file
+from io import BytesIO
 from werkzeug.utils import secure_filename
 from functions import master_function
 from flask_cors import CORS
@@ -65,13 +67,28 @@ def upload_file():
         file.save(file_path)
 
         # Now call master_function with the predefined parameters
-        result = master_function(file_path, grid_origin, cell_width, cell_height, grid_rows, grid_columns)
+        excel_io = master_function(file_path, grid_origin, grid_rows, grid_columns)
+        print(f"Received object from master_function: {type(excel_io)}")  # Debugging log
         print("Processing complete!")  # Debugging log
+
+                # Send the in-memory file as a response for download
+        # Ensure that we have a BytesIO object and return it using send_file
+        if isinstance(excel_io, BytesIO):
+            return send_file(
+                excel_io,
+                as_attachment=True,
+                download_name="grid_cells_output.xlsx",
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            print("Error: Expected a BytesIO object, but got something else.")
+            return jsonify({"error": "Something went wrong, file could not be generated."}), 500
 
         return jsonify(result)
     
     print("Invalid file type")
     return jsonify({"error": "Invalid file type. Only DXF files are allowed."}), 400
+
 
 
 @app.route('/')

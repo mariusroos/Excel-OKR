@@ -29,9 +29,28 @@ function FileUpload() {
     try {
       const response = await axios.post('http://localhost:5001/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        responseType: 'blob', // Important: set responseType to 'blob' to handle binary data
       });
-
-      setLwpolylines(response.data);  // Display the response from Flask
+    
+      // Create a link element
+      const link = document.createElement('a');
+      
+      // Create a URL for the Blob object
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+    
+      // Set the download attribute with a default filename
+      link.href = url;
+      link.setAttribute('download', 'grid_cells_output.xlsx');  // You can dynamically change this filename if needed
+      
+      // Append the link to the DOM (it’s not displayed, just needs to exist)
+      document.body.appendChild(link);
+      
+      // Trigger the download by simulating a click
+      link.click();
+      
+      // Clean up the link element after downloading
+      document.body.removeChild(link);
+      
     } catch (error) {
       console.error('Error uploading file:', error);
     }
