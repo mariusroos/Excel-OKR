@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+//import './FileDropZone.css'; // Create this CSS file for styling
 
 function FileUpload() {
   const [file, setFile] = useState(null);
